@@ -1,0 +1,13 @@
+def fac(n:int)->int:
+	cumul = 1
+	next = 2
+	def fact_iter():
+		global cumul, next
+		if next == n:
+			return cumul
+		cumul *= next
+		next += 1
+		return fact_iter()
+	return fact_iter()
+
+print(fac(6))
