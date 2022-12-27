@@ -99,7 +99,16 @@
 )
 
 
-
+(define (coerse z1 type)
+  ;;type cast z1 to type
+  (define type-hierarchy (list 'int 'rational 'complex))
+  (define (coerse-one z1 direction)
+    ;;do one step of type coersion, direction is 'up or 'down
+    
+    0
+    )
+  0
+  )
 
 (install-rational-numbers)
 (install-complex-numbers)
