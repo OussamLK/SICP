@@ -41,6 +41,15 @@
   )
 (define (get-subtype t) (if (not (eq? (car type-hierarchy) t)) (cadr (member t (reverse type-hierarchy))) #f ))
 
+(define (coerce origin target)
+  (if (not (and (type-exists? origin) (type-exists? target)))
+      (error "Types do not exist")
+      0
+      )
+
+  0)
+
+
 
 (define (put procedure-name type-list procedure)
     (cons-proc! (list procedure-name type-list procedure)))

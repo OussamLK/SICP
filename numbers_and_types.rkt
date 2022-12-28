@@ -55,6 +55,7 @@
         )
     ;;external
     (put 'make '(rational) (lambda (a b) (tag 'rational (make a b))))
+    (put 'coerce '(int rational) (lambda (a) (tag 'rational (make a 1))))
     (put 'add '(rational rational) (lambda (q1 q2) (tag 'rational (add q1 q2))))
 
 )
@@ -91,7 +92,7 @@
    ;;external
    (put 'make-from-rect '(complex) (lambda (r i) (tag 'complex (make-complex-rect r i))))
    (put 'make-from-polar '(complex) (lambda (r i) (tag 'complex (make-complex-polar r i))))
-   (put 'coerce '(rational complex) (lambda (r) (tag 'complex (make-complex-rect (* r 1.0) 0)))) ;; check this
+   (put 'coerce '(rational complex) (lambda (r) (tag 'complex (make-complex-rect r 0)))) ;; check this
    (put 'add '(complex complex) (lambda (z1 z2) (tag 'complex (add z1 z2)))) 
    (put 'subtract '(complex complex) (lambda (z1 z2) (tag 'complex (subtract z1 z2)))) 
    (put 'mult '(complex complex) (lambda (z1 z2) (tag 'complex (mult z1 z2)))) 
@@ -120,7 +121,10 @@
 (install-complex-numbers)
 (install-int)
 (define make-complex-rect (get 'make-from-rect '(complex)))
+(define make-rational (get 'make '(rational)))
 (define make-int (get 'make '(int)))
+(define coerce-int-rational (get 'coerce '(int rational)))
+(define coerce-rational-complex (get 'coerce '(rational complex)))
 (define (add z1 z2) (generic-operation 'add z1 z2))
 (define (mult z1 z2) (generic-operation 'mult z1 z2))
 (define (div z1 z2) (generic-operation 'div z1 z2))
@@ -128,11 +132,15 @@
 (let ((z1 (make-complex-rect 0.0000000001 1))
       (z2 (make-complex-rect 2 0))
       (i (make-int 3))
+      (rat (make-rational 3 2))
      )
     (add z1 z2)
     (mult z1 z2)
     (div z1 z2)
     (add i i)
+    (coerce-rational-complex (let ((num (car (get-content rat)))
+                                   (denom (cdr (get-content rat))))
+                                        (/ num denom)))
 
 )
 
