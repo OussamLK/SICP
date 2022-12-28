@@ -1,4 +1,4 @@
-#lang racket
+#lang racket/base
 (provide put
          get
          tag
@@ -6,10 +6,6 @@
          get-type
          get-content
          generic-operation
-         set-type-hierarchy
-         type-hierarchy
-         get-subtype
-         get-supertype
          )
 
 (define (list-eq? l1 l2)
@@ -29,17 +25,6 @@
 (define (cons-proc! proc-row)
     (set! proc-table (cons proc-row proc-table))
 )
-
-(define type-hierarchy '())
-(define (set-type-hierarchy h) (set! type-hierarchy h))
-(define (type-exists? t) (member t type-hierarchy))
-(define (get-supertype t)
-  (define (last lst) (if (null? lst) #f
-                         (if (null? (cdr lst)) (car lst)
-                             (last (cdr lst))))) 
-  (if (not (eq? (last type-hierarchy) t)) (cadr (member t type-hierarchy)) #f)
-  )
-(define (get-subtype t) (if (not (eq? (car type-hierarchy) t)) (cadr (member t (reverse type-hierarchy))) #f ))
 
 
 (define (put procedure-name type-list procedure)

@@ -1,7 +1,7 @@
 #lang racket/base
 (define (square x) (* x x))
 (define pi 3.1416)
-(require "procedure_installation.rkt") ;;put, get, tag, untag, get-tag, get-content
+(require "procedure_installation.rkt") ;;put, get, tag, untag, get-type, get-content, set-type-hierarchy, get-type-hierarchy, type-hierarchy
 (define (install-complex-rect)
     ;;internal to the package
     (define (make a b) (cons a b))
@@ -91,38 +91,48 @@
    ;;external
    (put 'make-from-rect '(complex) (lambda (r i) (tag 'complex (make-complex-rect r i))))
    (put 'make-from-polar '(complex) (lambda (r i) (tag 'complex (make-complex-polar r i))))
+   (put 'coerce '(rational complex) (lambda (r) (tag 'complex (make-complex-rect (* r 1.0) 0)))) ;; check this
    (put 'add '(complex complex) (lambda (z1 z2) (tag 'complex (add z1 z2)))) 
    (put 'subtract '(complex complex) (lambda (z1 z2) (tag 'complex (subtract z1 z2)))) 
    (put 'mult '(complex complex) (lambda (z1 z2) (tag 'complex (mult z1 z2)))) 
-   (put 'div '(complex complex) (lambda (z1 z2) (tag 'complex (div z1 z2)))) 
+   (put 'div '(complex complex) (lambda (z1 z2) (tag 'complex (div z1 z2))))
 
 )
 
+(define (install-int)
+  (define (add a b) (+ a b))
+  (define (subtract a b) (- a b))
+  (define (mult a b) (* a b))
+  (define (div a b) (/ (* a 1.0) b))
 
-(define (coerse z1 type)
-  ;;type cast z1 to type
-  (define type-hierarchy (list 'int 'rational 'complex))
-  (define (coerse-one z1 direction)
-    ;;do one step of type coersion, direction is 'up or 'down
-    
-    0
-    )
-  0
+  ;;external
+  (put 'make '(int) (lambda (a) (tag 'int a)))
+  (put 'add '(int int) (lambda (a b) (tag 'int (add a b))))
+  (put 'subtract '(int int) (lambda (a b) (tag 'int (subtract a b))))
+  (put 'mult '(int int) (lambda (a b) (tag 'int (mult a b))))
+  (put 'div '(int int) (lambda (a b) (tag 'int (div a b))))
   )
+  
 
+
+(set-type-hierarchy '(int rational complex))
 (install-rational-numbers)
 (install-complex-numbers)
+(install-int)
 (define make-complex-rect (get 'make-from-rect '(complex)))
+(define make-int (get 'make '(int)))
 (define (add z1 z2) (generic-operation 'add z1 z2))
 (define (mult z1 z2) (generic-operation 'mult z1 z2))
 (define (div z1 z2) (generic-operation 'div z1 z2))
 
 (let ((z1 (make-complex-rect 0.0000000001 1))
       (z2 (make-complex-rect 2 0))
+      (i (make-int 3))
      )
     (add z1 z2)
     (mult z1 z2)
     (div z1 z2)
+    (add i i)
 
 )
 
