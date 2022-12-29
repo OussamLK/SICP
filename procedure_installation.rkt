@@ -10,6 +10,8 @@
          type-hierarchy
          get-subtype
          get-supertype
+         coerce
+         auto-coerce
          )
 
 (define (list-eq? l1 l2)
@@ -40,11 +42,14 @@
   (if (not (eq? (last type-hierarchy) t)) (cadr (member t type-hierarchy)) #f)
   )
 (define (get-subtype t) (if (not (eq? (car type-hierarchy) t)) (cadr (member t (reverse type-hierarchy))) #f ))
+(define (types-in-order first then)
+  (>= (length (memq first type-hierarchy)) (length (memq then type-hierarchy)))) 
 
 (define (coersion-path origin target)
-   (if (not (and (type-exists? origin) (type-exists? target)))
-      (error "Types do not exist")
-      '((int . rational) (rational complex)))
+   (cond ((not (and (type-exists? origin) (type-exists? target))) (error "Types do not exist"))
+         ((not (types-in-order origin target)) error("type casting in the wrong direction"))
+         ((eq? origin target) '())
+         (else (cons (cons origin (get-supertype origin)) (coersion-path (get-supertype origin) target)))) 
   )
 
 
@@ -55,16 +60,17 @@
             (define (coerce-loop v path)
                  (if (null? path) v
                      (let ((coerce-proc (get 'coerce (list (caar path) (cdar path)))))
-                       (coerce-loop (ceorce-proc v) (cdr path))
+                       (coerce-loop (coerce-proc content) (cdr path))
                        )
-              )
+              ))
                (coerce-loop v path)
               )
 
     )
-  
-
-  0)
+(define (auto-coerce v1 v2)
+  (let ((t1 (get-type v1))
+        (t2 (get-type v2)))
+            (if (types-in-order t1 t2) (cons (coerce v1 t2) v2) (cons v1 (coerce v2 t1)))))
 
 
 

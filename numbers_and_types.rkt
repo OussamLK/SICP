@@ -123,8 +123,6 @@
 (define make-complex-rect (get 'make-from-rect '(complex)))
 (define make-rational (get 'make '(rational)))
 (define make-int (get 'make '(int)))
-(define coerce-int-rational (get 'coerce '(int rational)))
-(define coerce-rational-complex (get 'coerce '(rational complex)))
 (define (add z1 z2) (generic-operation 'add z1 z2))
 (define (mult z1 z2) (generic-operation 'mult z1 z2))
 (define (div z1 z2) (generic-operation 'div z1 z2))
@@ -138,9 +136,7 @@
     (mult z1 z2)
     (div z1 z2)
     (add i i)
-    (coerce-rational-complex (let ((num (car (get-content rat)))
-                                   (denom (cdr (get-content rat))))
-                                        (/ num denom)))
+    (auto-coerce i z1)
 
 )
 
