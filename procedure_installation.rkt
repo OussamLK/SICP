@@ -41,11 +41,28 @@
   )
 (define (get-subtype t) (if (not (eq? (car type-hierarchy) t)) (cadr (member t (reverse type-hierarchy))) #f ))
 
-(define (coerce origin target)
-  (if (not (and (type-exists? origin) (type-exists? target)))
+(define (coersion-path origin target)
+   (if (not (and (type-exists? origin) (type-exists? target)))
       (error "Types do not exist")
-      0
-      )
+      '((int . rational) (rational complex)))
+  )
+
+
+(define (coerce v target)
+  (let ((path (coersion-path (get-type v) target))
+        (content (get-content v))
+        )
+            (define (coerce-loop v path)
+                 (if (null? path) v
+                     (let ((coerce-proc (get 'coerce (list (caar path) (cdar path)))))
+                       (coerce-loop (ceorce-proc v) (cdr path))
+                       )
+              )
+               (coerce-loop v path)
+              )
+
+    )
+  
 
   0)
 
