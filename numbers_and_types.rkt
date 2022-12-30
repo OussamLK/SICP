@@ -123,7 +123,13 @@
 (define make-complex-rect (get 'make-from-rect '(complex)))
 (define make-rational (get 'make '(rational)))
 (define make-int (get 'make '(int)))
-(define (add z1 z2) (generic-operation 'add z1 z2))
+(define (generic-operation-with-coersion op a b)
+  (define ct (auto-coerce a b))
+    (let ((ca (car ct))
+          (cb (cdr ct)))
+              
+              (generic-operation op ca cb)))
+(define (add z1 z2) (generic-operation-with-coersion 'add z1 z2))
 (define (mult z1 z2) (generic-operation 'mult z1 z2))
 (define (div z1 z2) (generic-operation 'div z1 z2))
 
@@ -135,8 +141,7 @@
     (add z1 z2)
     (mult z1 z2)
     (div z1 z2)
-    (add i i)
-    (auto-coerce i z1)
+    (add i z2)
 
 )
 
