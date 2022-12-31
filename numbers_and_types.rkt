@@ -116,6 +116,8 @@
   
 
 
+
+
 (set-type-hierarchy '(int rational complex))
 (install-rational-numbers)
 (install-complex-numbers)
@@ -141,7 +143,7 @@
     (add z1 z2)
     (mult z1 z2)
     (div z1 z2)
-    (add i z2)
+    (add i i)
 
 )
 
