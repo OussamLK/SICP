@@ -38,10 +38,15 @@
                               ((> deg1 deg2) (cons-monom-poly h1 (add-poly t1 poly2)))
                               ((< deg1 deg2) (cons-monom-poly h2 (add-poly poly1 t2)))
                               (else (error "something fishy is going on")))))))
+(define (reduce-poly p)
+  (cond ((zero-poly? p) p)
+        ((= (get-monom-coef (get-poly-head p)) 0) (reduce-poly (get-poly-tail p)))
+        (else p)))
+      
 
 (define (subtract-poly p1 p2)
   (let ((-1_ (make-monom -1 'x 0)))
-        (add-poly p1 (mult-monom-poly -1_ p2))
+        (reduce-poly (add-poly p1 (mult-monom-poly -1_ p2)))
     ))
 
 (define (mult-monom-monom m1 m2)
@@ -67,9 +72,38 @@
                     (t1 (get-poly-tail poly1))
                     )
                     (add-poly (mult-monom-poly m1 poly2) (mult-poly t1 poly2))))))
+(define (monom-to-poly m)
+  (cons-monom-poly m (make-null-poly)))
+
+(define (div-monom m1 m2)
+  (let ((c1 (get-monom-coef m1))
+        (c2 (get-monom-coef m2))
+        (deg1 (get-monom-degree m1))
+        (deg2 (get-monom-degree m2))
+        (var (get-monom-variable m1)))
+      (make-monom (/ c1 c2) var (- deg1 deg2))))
+
+(define (div-poly p1 p2)
+  ;; return the result and a rest as a pair
+  (if  (zero-poly? p1) (cons p1 (make-null-poly))
+  (let ((deg1 (get-poly-degree p1))
+        (deg2 (get-poly-degree p2))
+        (h1 (get-poly-head p1))
+        (h2 (get-poly-head p2)))
+    (cond ((< deg1 deg2) (cons (make-null-poly) p1))
+          (else (define partial-res (monom-to-poly (div-monom h1 h2)))
+                (define rec-res (div-poly (subtract-poly p1 (mult-poly partial-res p2)) p2))
+                (cons (add-poly partial-res (car rec-res)) (cdr rec-res)))))))
+                      
+
 ;; for testing
+(define x^5 (make-monom 1 'x 5))
 (define x^2 (make-monom 1 'x 2))
-(define 1_ (make-monom 1 'x 0))
 (define -1_ (make-monom -1 'x 0))
+(define x^3 (make-monom 1 'x 3))
+(define x (make-monom 1 'x 1))
 (define np (make-null-poly))
-(define x^2+1 (cons-monom-poly x^2 (cons-monom-poly 1_ np)))
+(define x^5-1 (cons-monom-poly x^5 (cons-monom-poly -1_ np)))
+(define x^2-1 (cons-monom-poly x^2 (cons-monom-poly -1_ np)))
+(define x^3+x (cons-monom-poly x^3 (cons-monom-poly x np)))
+(define res (div-poly x^5-1 x^2-1))
