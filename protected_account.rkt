@@ -18,3 +18,12 @@
 
 (define (protected-account amount password)
   (protect (make-account amount) password))
+
+(define (make-joint acc old-pw new-pw)
+  (protect (lambda (command)
+             (acc command old-pw))
+                new-pw))
+
+(define peter-acc (protected-account 100 'open-sesame))
+(define anna-acc (make-joint peter-acc 'open-sesame 'rosebud))
+
