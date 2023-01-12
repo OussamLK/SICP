@@ -54,6 +54,20 @@
   (delayed-update)
   (set-action! in delayed-update))
 
+(define (make-or-gate in1 in2 out)
+  (let ((w1 (make-wire))
+        (w2 (make-wire))
+        (w3 (make-wire)))
+    (let ((not1 (make-not-gate in1 w1))
+          (not2 (make-not-gate in2 w2))
+          (inner-and (make-and-gate w1 w2 w3))
+          (last-not (make-not-gate w3 out)))
+      'done
+      )))
+
+
+
+
 (define a (make-wire))
 (define b (make-wire))
 (define res (make-wire))
@@ -63,6 +77,7 @@
 
 (res 'get-signal)
 ((a 'set-signal!) 1)
+(res 'get-signal)
 ((b 'set-signal!) 1)
 (res 'get-signal)
 (res2 'get-signal)
