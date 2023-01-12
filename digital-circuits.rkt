@@ -31,16 +31,38 @@
   (display "sleeping for ") (display delay-sec) (display "seconds...")
   (f))
 
-;;(define (make-and-gate in1 in2 out)
-  
+
+
+(define (make-and-gate in1 in2 out)
+  (define and-delay 1)
+  (define (band v1 v2)
+    (if (and (= v1 1) (= v2 1)) 1 0))
+  (define (delayed-update)
+    (let ((new-output (band (in1 'get-signal) (in2 'get-signal))))
+      (after-delay and-delay (lambda () ((out 'set-signal!) new-output)))))
+  (delayed-update) ;;set the output on creation
+  (set-action! in1 delayed-update)
+  (set-action! in2 delayed-update))
+
+(define (make-not-gate in out)
+  (define not-delay 0.5)
+  (define (bnot in)
+    (if (= 0 in) 1 0))
+  (define (delayed-update)
+    (let ((new-output (bnot (in 'get-signal))))
+      (after-delay not-delay (lambda () ((out 'set-signal!) new-output)))))
+  (delayed-update)
+  (set-action! in delayed-update))
 
 (define a (make-wire))
 (define b (make-wire))
 (define res (make-wire))
+(define res2 (make-wire))
+(define and-gate1 (make-and-gate a b res))
+(define nand1 (make-not-gate res res2))
 
-
-(define w1 (make-wire))
-((w1 'register-update-function!) (lambda ()
-                                   (display "signal has changed to: ")
-                                   (display (w1 'get-signal))
-                                   (display "\n")))
+(res 'get-signal)
+((a 'set-signal!) 1)
+((b 'set-signal!) 1)
+(res 'get-signal)
+(res2 'get-signal)
