@@ -34,7 +34,7 @@
                                                       (count-free-connectors (cdr connectors)))))
         (let ((nb-free-connectors (count-free-connectors (list a b c))))
              (cond ((= nb-free-connectors 1) (get-first-null-connector))
-                   ((= nb-free-connectors 
+                   ((= nb-free-connectors e
           
       )
     (define (refresh)
