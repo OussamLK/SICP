@@ -1,6 +1,7 @@
 #lang racket
 (require  racket/stream)
 (define (op-streams op s1 s2)
+  (display "evaluating\n")
   (if (or (stream-empty? s1) (stream-empty? s2)) empty-stream
       (stream-cons (op (stream-first s1) (stream-first s2)) (op-streams op (stream-rest s1) (stream-rest s2)))))
 
@@ -19,6 +20,7 @@
  )
 
 (define (merge s1 s2)
+  ;;from the book (adapted to racket)
   (cond ((stream-empty? s1) s2)
         ((stream-empty? s2) s1)
         (else
@@ -37,14 +39,13 @@
                    s1car
                    (merge (stream-rest s1)
                           (stream-rest s2)))))))))
+
 (define (scale-stream s n)
   (if (stream-empty? s) empty-stream (stream-cons (* n (stream-first s)) (scale-stream (stream-rest s) n))))
 (define s (interval-stream 1 100))
 (define ps (partial-sums s))
 (define (divisible? n k) (= (remainder n k) 0))
-(define d2 (stream-filter (lambda (n) (divisible? n 2)) s))
-(define d3 (stream-filter (lambda (n) (divisible? n 3)) s))
-(define H (stream-cons 1 (merge (scale-stream H 2) (merge (scale-stream H 3) (scale-stream H 5)))))
-(define haming-stream (stream-filter (lambda (n) (or (divisible? n 2) (divisible? n 3) (divisible? n 5))) s))
+(define H (stream-cons 1 (merge (scale-stream H 5) (merge (scale-stream H 3) (scale-stream H 2)))))
 (first 20 (stream-rest H))
-(first 20 haming-stream)
+(define s2 (stream-cons 1 (add-streams s2 s2)))
+(first 10 s2)
