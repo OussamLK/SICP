@@ -28,6 +28,37 @@
 (define (square-s s) (mul-series s s))
 (define (eval-1 s n) (if (= 0 n) 0 (+ (stream-first s) (eval-1 (stream-rest s) (- n 1))))) 
 
-(show-first 10 cosine-series)
-(show-first 10 sine-series)
-(eval-1 (add (square-s cosine-series) (square-s sine-series)) 10)
+(define (invert-series s)
+  ;;let 1/S = X => SX = 1 => (1 + Sr) X = 1 => X = 1 - XSr
+  (let ((c (stream-first s)))
+          (define s1 (scale (/ 1 c) s)) ;;Becase the trick only works with a leading term of 1
+          (define inv-s1 (stream-cons 1 (scale -1 (mul-series inv-s1 (stream-rest s1)))))
+          (scale (/ 1 c) inv-s1)))
+
+(define (div-series n d)
+  (mul-series n (invert-series d)))
+
+(define (eval-series s x n)
+  (define xs (stream-cons 1 (scale x xs)))
+  (let ((res (alg * xs s)))
+    (define (add-first n s)
+      (if (<= n 0) 0
+          (+ (stream-first s) (add-first (- n 1) (stream-rest s)))))
+    (* 1.0 (add-first n res))))
+
+(define tan-series (div-series sine-series cosine-series))
+
+;;tests
+
+;(show-first 10 cosine-series)
+;(show-first 10 sine-series)
+;(eval-1 (add (square-s cosine-series) (square-s sine-series)) 10)
+(define pi 3.1415)
+(define pi/2 (/ pi 2))
+(define pi/4 (/ pi 4))
+(define all-ones (stream-cons 1 all-ones))
+(eval-series sine-series pi/4 20)
+(eval-series cosine-series pi/4 20)
+(eval-series tan-series (/ pi 3) 100)
+(tan (/ pi 3))
+
