@@ -77,7 +77,39 @@
 
 (define int-pairs-i<j<k (pairs (pairs integers list-integers) list-integers))
 (define intijk-flat (stream-map flatten int-pairs-i<j<k ))
-(first-n intijk-flat 100)
+
+(define (weighted-merge s1 s2 w)
+  (let ((f1 (stream-first s1))
+        (f2 (stream-first s2)))
+    (if (< (w f1) (w f2)) (stream-cons f1 (weighted-merge (stream-rest s1) s2 w))
+                          (stream-cons f2 (weighted-merge s1 (stream-rest s2) w)))))
+
+(define test-wm (weighted-merge integers (stream-map (lambda (i) (* i 3)) integers ) (lambda (n) n) ))
+
+(define (weighted-pair-merge s1 s2 w)
+  (let ((piece1 (stream-map (lambda (e) (list (stream-first s1) e)) (stream-rest s2))))
+  (stream-cons (list (stream-first s1) (stream-first s2))
+               (weighted-merge piece1
+                               (weighted-pair-merge (stream-rest s1)
+                                                    (stream-rest s2)
+                                                     w)
+                               w))))
+(define (weight pair)
+   (apply + pair))
+
+(define i-j (weighted-pair-merge integers integers weight))
+;(first-n i-j 20)
+
+(define (weight-b pair)
+  (let ((i (car pair))
+        (j (cadr pair)))
+    (+ (* 2 i) (* 3 j) (* 5 i j))))
+(define i-j-b (weighted-pair-merge integers integers weight-b))
+(first-n i-j-b 20)
+
+
+
+
 
 
 
