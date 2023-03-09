@@ -104,12 +104,57 @@
   (let ((i (car pair))
         (j (cadr pair)))
     (+ (* 2 i) (* 3 j) (* 5 i j))))
-(define i-j-b (weighted-pair-merge integers integers weight-b))
-(first-n i-j-b 20)
+(define (all? lst)
+  (cond ((null? lst) #t)
+        ((car lst) (all? (cdr lst)))
+        (else #f)))
+
+(define (not-div-235? n)
+  (define (not-divisible? n k)
+    (not (= (modulo n k) 0)))
+  (all? (map (lambda (k) (not-divisible? n k)) (list 2 3 5))))
+
+(not-div-235? 5)
+(define (not-div-235-lst? lst)
+  (all? (map not-div-235? lst)))
+
+;(define i-j-b (stream-filter not-div-235-lst? (weighted-pair-merge integers integers weight-b)))
+;(first-n i-j-b 20)
+(define (ram-ordering pair)
+  (let ((i (car pair))
+        (j (cadr pair)))
+        (+ (* i i i)) (* j j j)))
+(define ram-stream (weighted-pair-merge integers integers ram-ordering))
+(define (consec s eq_? max_)
+  (if (< max_ 0) (begin (display "nothing last: ") (stream-first s))
+  (begin
+    (if (eq_? (stream-first s) (stream-first (stream-rest s))) (stream-first s)
+        (consec (stream-rest s) eq_? (- max_ 1))))))
+(define (eq-pairs? p1 p2)
+  (and (= (car p1) (car p2)) (= (cadr p1) (cadr p2))))
+
+(define (stream-scale s a)
+  (stream-map (lambda (e) (* e a)) s))
+
+(define (stream-add s1 s2)
+  (stream-cons ( + (stream-first s1) (stream-first s2)) (stream-add (stream-rest s1) (stream-rest s2))))
+
+(define (integrate integrand v0 dt)
+  (define int (stream-cons v0 (stream-add int (stream-scale integrand dt))))
+  int)
+
+(define dt 0.1)
+(define (time-in-dt t) (* 1.0  (/ t  dt)))
 
 
 
+(define (get-v v0 R C)
+  (define i (stream-scale v (/ 1.0 R)))
+  (define v (stream-add (integrate (stream-scale i (/ 1.0 C))
+                        (stream-add (stream-scale i R) v0) dt)))
+  v)
 
+(first-n (get-v 1 5 1) (time-in-dt 10))
 
 
 
