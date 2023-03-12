@@ -36,7 +36,7 @@
 ;    stream-scale s x
 
 
-(define dt 0.05)
+(define dt 0.001)
 (define (time-in-dt t) (* 1.0  (/ t  dt)))
 
 
@@ -80,8 +80,8 @@
 
 ;; streams and delayed evaluation: 3.5.4
 
-(define (integrate-delayed integrand v0 dt)
-  (define int (stream-cons v0 (stream-add int (stream-scale (integrand) dt))))
+(define (integrate-delayed integrand-promise v0 dt)
+  (define int (stream-cons v0 (stream-add int (stream-scale (force integrand-promise) dt))))
   int)
 
 ;;solving equation dy/dt = f(y), and y(0) = y0
@@ -110,4 +110,28 @@
 
 ;; ex 3.78
 (define (solve-2nd a b y0 dy0)
-  0)
+  (define y (integrate-delayed (delay dy) y0 dt))
+  (define dy (integrate-delayed (delay d2y) dy0 dt))
+  (define d2y (stream-add (stream-scale dy a) (stream-scale y b)))
+  y)
+
+;; ex 3.79
+
+(define (solve-2nd-gen f a b y0 dy0)
+  (define y (integrate-delayed (delay dy) y0 dt))
+  (define dy (integrate-delayed (delay d2y) dy0 dt))
+  (define d2y (stream-map_ f dy y))
+  y)
+
+;; ex 3.80
+
+(define (RLC R L C vc0 il0)
+  (define vc (stream-scale (integrate-delayed (delay i) il0 dt) (/ 1.0 C)))
+  (define i (stream-add (stream-scale (integrate-delayed (delay vc)  vc0 dt) (/ 1.0 L))
+                        (stream-scale (integrate-delayed (delay i) il0 dt) (/ (* -1.0 R) L))))
+  (stream-map_ cons vc i))
+
+;;tests
+
+(define vi-stream (RLC 1 1 0.2 10 0))
+(first-n vi-stream 1000)
