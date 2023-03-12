@@ -126,12 +126,13 @@
 ;; ex 3.80
 
 (define (RLC R L C vc0 il0)
-  (define vc (stream-scale (integrate-delayed (delay i) il0 dt) (/ 1.0 C)))
+  (map display (list "R=" R "; L=" L "; C=" C "; vc0=" vc0 "; il0=" il0 "\n")) 
+  (define vc (stream-scale (integrate-delayed (delay i) il0 dt) (/ -1.0 C)))
   (define i (stream-add (stream-scale (integrate-delayed (delay vc)  vc0 dt) (/ 1.0 L))
                         (stream-scale (integrate-delayed (delay i) il0 dt) (/ (* -1.0 R) L))))
   (stream-map_ cons vc i))
 
 ;;tests
-
+(set! dt 0.1)
 (define vi-stream (RLC 1 1 0.2 10 0))
-(first-n vi-stream 1000)
+(stream-ref vi-stream 100)
