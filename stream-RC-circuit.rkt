@@ -133,6 +133,50 @@
   (stream-map_ cons vc i))
 
 ;;tests
-(set! dt 0.1)
-(define vi-stream (RLC 1 1 0.2 10 0))
-(stream-ref vi-stream 100)
+;(set! dt 0.1)
+;(define vi-stream (RLC 1 1 0.2 10 0))
+;(stream-ref vi-stream 100)
+
+; Exercise 3.81
+
+(define (next-rand val)
+  ;; just for the sake of testing
+  (+ val 1))
+
+(define (generator next-rand stream prev)
+  (let ((f (stream-first stream)))
+    (if (number? f) (stream-cons f (generator next-rand (stream-rest stream) f))
+        (let ((new (next-rand prev)))
+          (stream-cons new (generator next-rand (stream-rest stream) new))))))
+  
+;; testing
+(define (list->stream lst)
+  (if (null? lst) '() (stream-cons (car lst) (list->stream (cdr lst)))))
+
+(define test-stream (list->stream '(5 gen gen 3 gen gen gen 4 gen gen)))
+(define g (generator next-rand test-stream 0))
+;(first-n g 10)
+
+; exercise 3.82
+
+(define (estimate sample)
+  (define (rest successes total)
+       (if (sample) (stream-cons (/ (+ successes 1) (+ total 1)) (rest (+ successes 1) (+ total 1)))
+                    (stream-cons (/ successes (+ total 1)) (rest  successes (+ total 1)))))
+  (rest 0.0 0)
+  )
+
+(define (monte-carlo f max a b)
+  (define (sample a b)
+    (+ (* (random 1000) (/ (- b a) 1000.0)) a))
+  (define (under)
+    (let ((x (sample a b))
+          (y (sample 0 max)))
+      (< y (f x))))
+  (stream-scale (estimate under) (* max (- b a))))
+
+;tests
+
+(define (square x) (* x x))
+(define x3/3 (monte-carlo square 4 -2 2))
+(stream-ref x3/3 1000)
