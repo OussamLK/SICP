@@ -29,17 +29,6 @@
             (else (error "unknow command" m))))
     dispatch))
 
-;;tests
-(define g (create-environment '()))
-(define env (create-environment g))
-
-((g 'set-binding!) 'x 0)
-;((g 'get-binding) 'x)
-;((env 'get-binding) 'x)
-((env 'set-binding!) 'y 1)
-;((env 'get-binding) 'y)
-;((g 'get-binding) 'y)
-
 
 (define (ev exp env)
   (cond ((number? exp) exp)
@@ -47,8 +36,38 @@
         ((pair? exp)
          (cond ((eq? 'define (car exp)) ((env 'set-binding!) (cadr exp) (ev (caddr exp) env) ))
                ((eq? 'quote (car exp)) exp)
+               ((eq? 'lambda (car exp)) (create-function (cadr exp) (caddr exp) env))
            ))
         (else (error "I dont know how to evaluate " exp))))
 
-(ev '(define x 3) env)
-(ev 'x env)
+
+(define (create-function params body env)
+  (define (dispatch m)
+    (cond ((eq? m 'get-params) params)
+          ((eq? m 'get-body) body)
+          ((eq? m 'get-env) env)
+          (else (error "unknow command " m))))
+  dispatch)
+
+(define (evaluate-function function params-values)
+  (let ((env (create-environment (function 'get-env)))
+        (body (function 'get-body))
+        (params-names (function 'get-params)))
+    (define (bind-params rest-params rest-values)
+      (if (null? rest-params) 'done-binding
+          (begin
+             ((env 'set-binding!) (car rest-params) (ev (car rest-values)))
+             (bind-params (cdr rest-params) (cdr rest-values)))))
+    (bind-params params-names params-values)
+    (define (evaluate-body rest-body)
+      (if (null? (cdr rest-body)) (ev (car rest-body) env)
+          (begin (ev (car rest-body) env)
+                 (evaluate-body (cdr rest-body)))))
+    (evaluate-body body)))
+
+;;tests
+(define g (create-environment '()))
+(define env (create-environment g))
+
+(define add (create-function '(a b) '(+ a b) g))
+(evaluate-function add (list 1 2))
