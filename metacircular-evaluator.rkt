@@ -1,7 +1,37 @@
 #lang racket/base
 (require rackunit)
+(require racket/set)
 
 (define ns (make-base-namespace))
+
+(define (tagged-list? exp tag) (eq? tag (car exp)))
+(define (not-eq? v w) (not (eq? v w)))
+(define (primitive-procedure? procedure) [set-member? (seteq + - / * =) procedure])
+(define (variable? exp) (symbol? exp))
+
+(define (self-evaluating? exp) (or (number? exp) [set-member? (seteq #t #f) exp])) 
+
+(define (quoted? exp) (tagged-list? exp 'quote))
+(define (text-of-quotation quotation) (cadr quotation))
+
+(define (definition? exp) (tagged-list? exp 'define))
+(define (eval-definition definition env) [(env 'set-binding!) (cadr definition) (ev (caddr definition) env)])
+
+(define (lambda? exp) (tagged-list? exp 'lambda))
+(define (lambda-parameters lambda-expression) (cadr lambda-expression))
+(define (lambda-body lambda-expression) (caddr lambda-expression))
+
+(define (if? exp) (tagged-list? exp 'if))
+(define (if-predicate if-expression) (cadr if-expression))
+(define (if-consequent if-expression) (caddr if-expression))
+(define (if-alternative if-expression) (cadddr if-expression))
+(define (true? exp env) (not-eq? (ev exp env) #f))
+(define (eval-if if-expression env)
+  (let [(predicate (if-predicate if-expression))
+        (consequent (if-consequent if-expression))
+        (alternative (if-alternative if-expression))]
+    (if (true? predicate env) (ev consequent env) (ev alternative env))))
+
 
 
 (define (create-environment parent)
@@ -35,20 +65,19 @@
     dispatch))
 
 
+
 (define (ev exp env)
-  (define (primitive-procedure? exp) (member (car exp) '(+ - * /)))
+  
   (define (get-value sym) (ev sym env))
-  (cond ((number? exp) exp)
-        ((symbol? exp) ([env 'get-binding] exp))
+  (cond ((self-evaluating? exp) exp)
+        ((variable? exp) ([env 'get-binding] exp))
         ((pair? exp)
-         (cond ((primitive-procedure? exp) (eval (cons (car exp)
-                                                    [map get-value (cdr exp)])
-                                              ns))
-               ((eq? 'define (car exp)) ((env 'set-binding!) (cadr exp) (ev (caddr exp) env) ))
-               ((eq? 'quote (car exp)) exp)
-               ((eq? 'lambda (car exp)) (create-function (cadr exp) (caddr exp) env))
+         (cond ((definition? exp) (eval-definition exp env))
+               ((quoted? exp) (text-of-quotation exp))
+               ((if? exp) (eval-if exp env))
+               ((lambda? exp) (create-function (lambda-parameters exp) (lambda-body exp) env))
                (else (let ([function (ev (car exp) env)])
-                       (if function (apply function [map get-value (cdr exp)] )
+                       (if function (apply_ function [map get-value (cdr exp)] )
                            (error "I can not find function: " (car exp)))))
            ))
         (else (error "I dont know how to evaluate " exp))))
@@ -62,23 +91,24 @@
           (else (error "unknow command " m))))
   dispatch)
 
-(define (apply function params-values)
-  (let ((env (create-environment (function 'get-env)))
-        (body (function 'get-body))
-        (params-names (function 'get-params)))
+(define (apply_ function params-values)
+  (if (primitive-procedure? function) (apply function params-values)
+      (let ((env (create-environment (function 'get-env)))
+            (body (function 'get-body))
+            (params-names (function 'get-params)))
     
-    (define (bind-params rest-params rest-values)
-      (if (null? rest-params) 'done-binding
-          (begin
-             ((env 'set-binding!) (car rest-params) (ev [car rest-values] env))
-             (bind-params (cdr rest-params) (cdr rest-values)))))
-    (bind-params params-names params-values)
+        (define (bind-params rest-params rest-values)
+          (if (null? rest-params) 'done-binding
+              (begin
+                ((env 'set-binding!) (car rest-params) (ev [car rest-values] env))
+                (bind-params (cdr rest-params) (cdr rest-values)))))
+        (bind-params params-names params-values)
 
-    (define (evaluate-body rest-body)
-      (if (null? (cdr rest-body)) (ev (car rest-body) env)
-          (begin (ev (car rest-body) env)
-                 (evaluate-body (cdr rest-body)))))
-    (evaluate-body body)))
+        (define (evaluate-body rest-body)
+          (if (null? (cdr rest-body)) (ev (car rest-body) env)
+              (begin (ev (car rest-body) env)
+                     (evaluate-body (cdr rest-body)))))
+        (evaluate-body body))))
 
 ;; tests
 
@@ -91,6 +121,7 @@
    (define env (create-environment g))
    ([g 'set-binding!] 'a 1)
    ([env 'set-binding!] 'b 2)
+   (for-each (lambda (op) ([g 'set-binding!] op (eval op ns))) '(+ - / * =))
   (cons g env))
   
 (test-begin
@@ -121,3 +152,12 @@
    (check-equal? [ev '(f1 2 6)  env] -2 "evaluating quoted expressions")
    ))
 
+(test-begin
+ "Testing the if evaluation"
+ (define envs (setup-test-envs))
+ (let [(g (car envs))
+       (env (cdr envs))]
+   (check-equal? [ev '(if #t a b) env] 1 "evaluating a true predicate")
+   (check-equal? [ev '(if 1 a b) env] 1 "evaluating an int predicate")
+   (check-equal? [ev '(if #f a b) env] 2 "evaluating a false predicate")
+   (check-equal? [ev '(if (= 1 2) a b) env] 2 "evaluating a false compound predicate")))
