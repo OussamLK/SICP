@@ -32,6 +32,9 @@
         (alternative (if-alternative if-expression))]
     (if (true? predicate env) (ev consequent env) (ev alternative env))))
 
+(define (application? exp) (pair? exp))
+(define (operands application) (cdr application))
+(define (operator application) (car application))
 
 
 (define (create-environment parent)
@@ -71,16 +74,14 @@
   (define (get-value sym) (ev sym env))
   (cond ((self-evaluating? exp) exp)
         ((variable? exp) ([env 'get-binding] exp))
-        ((pair? exp)
-         (cond ((definition? exp) (eval-definition exp env))
-               ((quoted? exp) (text-of-quotation exp))
-               ((if? exp) (eval-if exp env))
-               ((lambda? exp) (create-function (lambda-parameters exp) (lambda-body exp) env))
-               (else (let ([function (ev (car exp) env)])
-                       (if function (apply_ function [map get-value (cdr exp)] )
-                           (error "I can not find function: " (car exp)))))
-           ))
-        (else (error "I dont know how to evaluate " exp))))
+        ((definition? exp) (eval-definition exp env))
+        ((quoted? exp) (text-of-quotation exp))
+        ((if? exp) (eval-if exp env))
+        ((lambda? exp) (create-function (lambda-parameters exp) (lambda-body exp) env))
+        ((application? exp) (let ([function (ev (operator exp) env)])
+                                   (if function (apply_ function [map get-value (cdr exp)])
+                                     (error "I can not find function: " (operator exp)))))
+        (else (error "I do not know how to evaluate: " exp ))))
 
 
 (define (create-function params body env)
