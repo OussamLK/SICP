@@ -83,6 +83,12 @@
         (else (error "I do not know how to evaluate: " exp ))))
 
 
+(define (evaluate-sequence sequence env)
+   (if (null? (cdr sequence)) (ev (car sequence) env)
+       (begin (ev (car sequence) env)
+              (evaluate-sequence (cdr sequence)))))
+
+
 (define (create-function params body env)
   (define (dispatch m)
     (cond ((eq? m 'get-params) params)
@@ -100,11 +106,7 @@
         (define (bind symb val) ((env 'set-binding!) symb val))
         (for-each bind params-names params-values)
 
-        (define (evaluate-body rest-body)
-          (if (null? (cdr rest-body)) (ev (car rest-body) env)
-              (begin (ev (car rest-body) env)
-                     (evaluate-body (cdr rest-body)))))
-        (evaluate-body body))))
+        (evaluate-sequence body env))))
 
 ;; tests
 
