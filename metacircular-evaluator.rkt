@@ -69,8 +69,7 @@
 
 
 
-(define (ev exp env)
-  
+(define (ev exp env)  
   (define (get-value sym) (ev sym env))
   (cond ((self-evaluating? exp) exp)
         ((variable? exp) ([env 'get-binding] exp))
@@ -97,13 +96,9 @@
       (let ((env (create-environment (function 'get-env)))
             (body (function 'get-body))
             (params-names (function 'get-params)))
-    
-        (define (bind-params rest-params rest-values)
-          (if (null? rest-params) 'done-binding
-              (begin
-                ((env 'set-binding!) (car rest-params) (ev [car rest-values] env))
-                (bind-params (cdr rest-params) (cdr rest-values)))))
-        (bind-params params-names params-values)
+        ;binding the parameters in the new environment
+        (define (bind symb val) ((env 'set-binding!) symb val))
+        (for-each bind params-names params-values)
 
         (define (evaluate-body rest-body)
           (if (null? (cdr rest-body)) (ev (car rest-body) env)
