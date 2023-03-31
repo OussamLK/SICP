@@ -76,7 +76,7 @@
         ((definition? exp) (eval-definition exp env))
         ((quoted? exp) (text-of-quotation exp))
         ((if? exp) (eval-if exp env))
-        ((lambda? exp) (create-function (lambda-parameters exp) (lambda-body exp) env))
+        ((lambda? exp) (make-procedure (lambda-parameters exp) (lambda-body exp) env))
         ((application? exp) (let ([function (ev (operator exp) env)])
                                    (if function (apply_ function [map get-value (cdr exp)])
                                      (error "I can not find function: " (operator exp)))))
@@ -89,7 +89,7 @@
               (evaluate-sequence (cdr sequence)))))
 
 
-(define (create-function params body env)
+(define (make-procedure params body env)
   (define (dispatch m)
     (cond ((eq? m 'get-params) params)
           ((eq? m 'get-body) body)
@@ -146,7 +146,7 @@
  (define envs (setup-test-envs))
  (let ([g (car envs)]
        [env (cdr envs)])
-   ((env 'set-binding!) 'f1 (create-function '(a b) (list '(- (* a 2) b)) env))
+   ((env 'set-binding!) 'f1 (make-procedure '(a b) (list '(- (* a 2) b)) env))
    (check-equal? [ev '(f1 2 6)  env] -2 "evaluating quoted expressions")
    ))
 
