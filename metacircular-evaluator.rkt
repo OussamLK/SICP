@@ -33,7 +33,10 @@
     (if (true? predicate env) (ev consequent env) (ev alternative env))))
 
 (define (application? exp) (pair? exp))
+(define (no-operands? exp) (null? exp))
 (define (operands application) (cdr application))
+(define (first-operand exp) (car (operands exp)))
+(define (rest-operands exp) (cdr (operands exp)))
 (define (operator application) (car application))
 
 
@@ -86,7 +89,7 @@
 (define (evaluate-sequence sequence env)
    (if (null? (cdr sequence)) (ev (car sequence) env)
        (begin (ev (car sequence) env)
-              (evaluate-sequence (cdr sequence)))))
+              (evaluate-sequence (cdr sequence) env))))
 
 
 (define (make-procedure params body env)
@@ -148,6 +151,8 @@
        [env (cdr envs)])
    ((env 'set-binding!) 'f1 (make-procedure '(a b) (list '(- (* a 2) b)) env))
    (check-equal? [ev '(f1 2 6)  env] -2 "evaluating quoted expressions")
+   ((env 'set-binding!) 'f2 (make-procedure '() (list 0 1) env))
+   (check-equal? (ev '(f2) env) 1 "evaluating a procedure with no operands")
    ))
 
 (test-begin
