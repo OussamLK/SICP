@@ -3,6 +3,7 @@
 (require racket/set)
 
 (define ns (make-base-namespace))
+(define nil '())
 
 (define (tagged-list? exp tag) (eq? tag (car exp)))
 (define (not-eq? v w) (not (eq? v w)))
@@ -15,7 +16,12 @@
 (define (text-of-quotation quotation) (cadr quotation))
 
 (define (definition? exp) (tagged-list? exp 'define))
-(define (eval-definition definition env) [(env 'set-binding!) (cadr definition) (ev (caddr definition) env)])
+(define (eval-definition definition env)
+  [(env 'set-binding!) (cadr definition) (ev (caddr definition) env)])
+(define (assignment? exp) (tagged-list? exp 'set!))
+(define (eval-assignment assignment env)
+  ([env 'set-binding!] (cadr assignment) (ev (caddr assignment) env)))
+
 
 (define (lambda? exp) (tagged-list? exp 'lambda))
 (define (lambda-parameters lambda-expression) (cadr lambda-expression))
@@ -46,6 +52,18 @@
   (define (get-binding-value b) (cdr b))
   (let ((bindings '()))
 
+    (define (binding-in-frame? sym)
+      (let ([frame-symbols (map get-binding-symbol bindings)])
+            (member sym frame-symbols)))
+    
+    (define (find-binding-env sym env)
+      ;finds the environment where sym is bound
+      ;if unbound, returns nil
+      (cond ((null? env) nil)
+            ([(env 'binding-in-frame?) sym] env)
+            (else (find-binding-env sym (env 'get-parent)))))
+      
+      
     (define (find-binding sym)
       (define (loop rest-bindings)
         (if (null? rest-bindings)
@@ -67,6 +85,9 @@
                    (let ((b (find-binding sym)))
                       (if (eq? b 'not-found) (error "unbound variable: " sym) b))))
             ((eq? 'set-binding! m) set-binding!)
+            ((eq? 'get-parent m) parent)
+            ((eq? 'binding-in-frame? m) binding-in-frame?)
+            ((eq? m 'find-binding-env) find-binding-env)
             (else (error "unknow command" m))))
     dispatch))
 
@@ -77,6 +98,7 @@
   (cond ((self-evaluating? exp) exp)
         ((variable? exp) ([env 'get-binding] exp))
         ((definition? exp) (eval-definition exp env))
+        ((assignment? exp) (eval-assignment exp env))
         ((quoted? exp) (text-of-quotation exp))
         ((if? exp) (eval-if exp env))
         ((lambda? exp) (make-procedure (lambda-parameters exp) (lambda-body exp) env))
@@ -131,7 +153,13 @@
  (let ([g (car envs)]
        [env (cdr envs)])
    (check-equal? ([env 'get-binding] 'a) 1 "retrieving value of 'a")
-   (check-equal? ([env 'get-binding] 'b) 2 "retrieving value of 'b")))
+   (check-equal? ([env 'get-binding] 'b) 2 "retrieving value of 'b")
+   (check-equal? ([env 'binding-in-frame?] 'a) #f "looking for a binding that is not in the frame")
+   (check-not-equal? ([env 'binding-in-frame?] 'b) #f "looking for a binding that is in the frame")
+   (check-equal? ([env 'find-binding-env] 'a env) g "a is bound in the global frame")
+   (check-equal? ([env 'find-binding-env] 'b env) env "b is bound in env frame")
+   (check-equal? ([env 'find-binding-env] 'c env) nil "looking for an unbound symbol")
+    ))
 
 (test-begin
  "Testing the evaluation of primitive expressions"
