@@ -19,8 +19,13 @@
 (define (eval-definition definition env)
   [(env 'set-binding!) (cadr definition) (ev (caddr definition) env)])
 (define (assignment? exp) (tagged-list? exp 'set!))
+(define (assignment-symbol assignment) (cadr assignment))
+(define (assignment-value assignment) (caddr assignment))
 (define (eval-assignment assignment env)
-  ([env 'set-binding!] (cadr assignment) (ev (caddr assignment) env)))
+  ((env 'make-assignment!)
+     (assignment-symbol assignment)
+     (assignment-value assignment)))
+  
 
 
 (define (lambda? exp) (tagged-list? exp 'lambda))
@@ -63,7 +68,6 @@
             ([(env 'binding-in-frame?) sym] env)
             (else (find-binding-env sym (env 'get-parent)))))
       
-      
     (define (find-binding sym)
       (define (loop rest-bindings)
         (if (null? rest-bindings)
@@ -77,9 +81,13 @@
     (define (set-binding! sym val)
       ;inefficient because it duplicates bindings that alreay exist but works
       (set! bindings (cons (create-binding sym val) bindings)))
-    
 
-    (define (dispatch m)
+    (define (make-assignment! symb val)
+      (let ((env (find-binding-env symb self)))
+        (if env ((env 'set-binding!) symb val)
+            (error "You are trying to assign to an unbound variable: " symb))))
+
+    (define (self m)
       (cond ((eq? m 'get-binding)
                 (lambda (sym)
                    (let ((b (find-binding sym)))
@@ -87,9 +95,10 @@
             ((eq? 'set-binding! m) set-binding!)
             ((eq? 'get-parent m) parent)
             ((eq? 'binding-in-frame? m) binding-in-frame?)
-            ((eq? m 'find-binding-env) find-binding-env)
+            ((eq? 'find-binding-env m) find-binding-env)
+            ((eq? 'make-assignment! m) make-assignment!)
             (else (error "unknow command" m))))
-    dispatch))
+    self))
 
 
 
@@ -159,6 +168,10 @@
    (check-equal? ([env 'find-binding-env] 'a env) g "a is bound in the global frame")
    (check-equal? ([env 'find-binding-env] 'b env) env "b is bound in env frame")
    (check-equal? ([env 'find-binding-env] 'c env) nil "looking for an unbound symbol")
+
+   ((env 'make-assignment!) 'a -1)
+   ((env 'make-assignment!) 'b -2)
+   (check-equal? ([env 'get-binding] 'a) -1 "setting a global variable")
     ))
 
 (test-begin
@@ -171,6 +184,20 @@
    (check-equal? [ev '(* 1 2) env] 2 "evaluating (* 1 2)")
    (check-equal? [ev '(- 1 2) env] -1 "evaluating (- 1 2)")
    (check-equal? [ev '(/ 1 2) env] (/ 1 2) "evaluating (/ 1 2)")))
+
+(test-begin
+ "Testing the definitions and assignments"
+ (define envs (setup-test-envs))
+ (let [(g (car envs))
+       (env (cdr envs))]
+   (ev '(define x -1) env)
+   (check-equal? (ev 'x env) -1 "checking that definitions work")
+   (ev '(set! x -2) env)
+   (check-equal? (ev 'x env) -2 "checking assignments")
+   (ev '(set! a -3) env)
+   (check-equal? (ev 'a env) -3 "checking assignments in parent frame")
+   ))
+
 
 (test-begin
  "Testing the definition and evaluation of functions"
