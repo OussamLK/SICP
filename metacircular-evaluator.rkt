@@ -16,15 +16,17 @@
 (define (text-of-quotation quotation) (cadr quotation))
 
 (define (definition? exp) (tagged-list? exp 'define))
+(define (definition-symbol def) (cadr def))
+(define (definition-value def) (caddr def))
 (define (eval-definition definition env)
-  [(env 'set-binding!) (cadr definition) (ev (caddr definition) env)])
+  [(env 'set-binding!) (definition-symbol definition) (ev (definition-value definition) env)])
 (define (assignment? exp) (tagged-list? exp 'set!))
 (define (assignment-symbol assignment) (cadr assignment))
 (define (assignment-value assignment) (caddr assignment))
 (define (eval-assignment assignment env)
   ((env 'make-assignment!)
      (assignment-symbol assignment)
-     (assignment-value assignment)))
+     (ev (assignment-value assignment) env)))
   
 
 
@@ -194,8 +196,8 @@
    (check-equal? (ev 'x env) -1 "checking that definitions work")
    (ev '(set! x -2) env)
    (check-equal? (ev 'x env) -2 "checking assignments")
-   (ev '(set! a -3) env)
-   (check-equal? (ev 'a env) -3 "checking assignments in parent frame")
+   (ev '(set! a (+ 1 x)) env)
+   (check-equal? (ev 'a env) -1 "checking assignments in parent frame")
    ))
 
 
