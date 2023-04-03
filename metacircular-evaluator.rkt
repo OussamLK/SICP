@@ -7,7 +7,7 @@
 
 (define (tagged-list? exp tag) (eq? tag (car exp)))
 (define (not-eq? v w) (not (eq? v w)))
-(define (primitive-procedure? procedure) [set-member? (seteq + - / * =) procedure])
+(define (primitive-procedure? procedure) [set-member? (seteq + - / * = < >) procedure])
 (define (variable? exp) (symbol? exp))
 
 (define (self-evaluating? exp) (or (number? exp) [set-member? (seteq #t #f) exp])) 
@@ -60,9 +60,36 @@
 (define (eval-sequence seq env)
   (cond ((null? seq) (error "Can not evaluate null sequence"))
         ((last-expression? seq) (ev (car seq) env))
-        (else (begin (ev (car seq) env)
-                     (eval-sequence (cdr seq) env)))))
+        (else (ev (car seq) env)
+              (eval-sequence (cdr seq) env))))
 (define (eval-begin exp env) (eval-sequence (begin-actions exp) env))
+(define (seq->begin seq) (make-begin seq))
+
+(define (cond? exp) (tagged-list? exp 'cond))
+(define (clauses exp) (cdr exp))
+(define (first-clause clauses) (car clauses))
+(define (rest-clauses clauses) (cdr clauses))
+(define (clause-predicate clause) (car clause))
+(define (clause-actions clause) (cdr clause))
+(define (else-clause? clause) (tagged-list? clause 'else))
+(define (else-action clause) (cadr clause))
+
+
+(define (clauses->if clauses)
+  (if (null? clauses) #f
+      (let ((clause (car clauses)))
+           (if (else-clause? clause) (seq->begin (clause-actions clause))
+               (list 'if
+                     (clause-predicate (first-clause clauses))
+                     (seq->begin (clause-actions clause))
+                     (clauses->if (rest-clauses clauses))
+                     )))))
+
+(define (cond->if exp) (clauses->if (clauses exp)))
+(define (eval-cond exp env) (ev (cond->if exp) env))
+    
+
+
 
 (define (create-environment parent)
   (define (create-binding symbol value) (cons symbol value))
@@ -125,6 +152,7 @@
         ((if? exp) (eval-if exp env))
         ((begin? exp) (eval-begin exp env))
         ((lambda? exp) (make-procedure (lambda-parameters exp) (lambda-body exp) env))
+        ((cond? exp) (eval-cond exp env))
         ((application? exp) (let ([function (ev (operator exp) env)])
                                    (if function (apply_ function [map get-value (cdr exp)])
                                      (error "I can not find function: " (operator exp)))))
@@ -167,7 +195,7 @@
    (define env (create-environment g))
    ([g 'set-binding!] 'a 1)
    ([env 'set-binding!] 'b 2)
-   (for-each (lambda (op) ([g 'set-binding!] op (eval op ns))) '(+ - / * =))
+   (for-each (lambda (op) ([g 'set-binding!] op (eval op ns))) '(+ - / * = > <))
   (cons g env))
   
 (test-begin
@@ -219,6 +247,8 @@
        [env (cdr envs)])
    (define begin-exp (make-begin '( (define x_ -4) x_)))
    (check-equal? (ev begin-exp env) -4 "checking a that begin works")
+   (define seq '( (define y_ -3) y_))
+   (check-equal? (ev (seq->begin seq) env) -3 "Testing seq->begin")
    ))
 
 (test-begin
@@ -241,3 +271,23 @@
    (check-equal? [ev '(if 1 a b) env] 1 "evaluating an int predicate")
    (check-equal? [ev '(if #f a b) env] 2 "evaluating a false predicate")
    (check-equal? [ev '(if (= 1 2) a b) env] 2 "evaluating a false compound predicate")))
+
+(test-begin
+ "Testing the cond expression"
+ (define envs (setup-test-envs))
+ (let [(g (car envs))
+       (env (cdr envs))]
+   (define cond1 '(cond ((< x 0) (- x))
+                        (else x)))
+   (ev '(define x -3) env)
+   (ev '(define y -3) env)
+   (check-equal? (ev cond1 env) 3 "checking cond with absolute value")
+   (ev '(define x 2) env)
+   (check-equal? (ev cond1 env) 2 "checking abs with positive value")
+   (define cond2 '(cond ((> y 0) 0) (else y)))
+   (check-equal? (ev cond2 env) -3 "checking a cond with an else clause")
+   
+   ))
+
+(define cond_ '(cond ((< x 0) (- x))
+                     (else x)))
