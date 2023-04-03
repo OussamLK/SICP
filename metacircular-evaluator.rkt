@@ -19,6 +19,7 @@
 (define (definition-symbol def) (cadr def))
 (define (definition-value def) (caddr def))
 (define (eval-definition definition env)
+  ;;Shouldn't I be using list-of-values instead of evaluating on the fly?
   [(env 'set-binding!) (definition-symbol definition) (ev (definition-value definition) env)])
 (define (assignment? exp) (tagged-list? exp 'set!))
 (define (assignment-symbol assignment) (cadr assignment))
@@ -52,6 +53,16 @@
 (define (rest-operands exp) (cdr (operands exp)))
 (define (operator application) (car application))
 
+(define (begin? exp) (tagged-list? exp 'begin))
+(define (last-expression? exp) (null? (cdr exp)))
+(define (make-begin seq) (cons 'begin seq))
+(define (begin-actions exp) (cdr exp))
+(define (eval-sequence seq env)
+  (cond ((null? seq) (error "Can not evaluate null sequence"))
+        ((last-expression? seq) (ev (car seq) env))
+        (else (begin (ev (car seq) env)
+                     (eval-sequence (cdr seq) env)))))
+(define (eval-begin exp env) (eval-sequence (begin-actions exp) env))
 
 (define (create-environment parent)
   (define (create-binding symbol value) (cons symbol value))
@@ -112,6 +123,7 @@
         ((assignment? exp) (eval-assignment exp env))
         ((quoted? exp) (text-of-quotation exp))
         ((if? exp) (eval-if exp env))
+        ((begin? exp) (eval-begin exp env))
         ((lambda? exp) (make-procedure (lambda-parameters exp) (lambda-body exp) env))
         ((application? exp) (let ([function (ev (operator exp) env)])
                                    (if function (apply_ function [map get-value (cdr exp)])
@@ -120,7 +132,7 @@
 
 
 (define (evaluate-sequence sequence env)
-   (if (null? (cdr sequence)) (ev (car sequence) env)
+   (if (last-expression? sequence) (ev (car sequence) env)
        (begin (ev (car sequence) env)
               (evaluate-sequence (cdr sequence) env))))
 
@@ -200,6 +212,14 @@
    (check-equal? (ev 'a env) -1 "checking assignments in parent frame")
    ))
 
+(test-begin
+ "Testing the evaluation of begin expressions"
+ (define envs (setup-test-envs))
+ (let ([g (car envs)]
+       [env (cdr envs)])
+   (define begin-exp (make-begin '( (define x_ -4) x_)))
+   (check-equal? (ev begin-exp env) -4 "checking a that begin works")
+   ))
 
 (test-begin
  "Testing the definition and evaluation of functions"
