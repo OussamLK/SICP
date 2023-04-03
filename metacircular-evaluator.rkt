@@ -20,7 +20,15 @@
 (define (definition-value def) (caddr def))
 (define (eval-definition definition env)
   ;;Shouldn't I be using list-of-values instead of evaluating on the fly?
-  [(env 'set-binding!) (definition-symbol definition) (ev (definition-value definition) env)])
+  (if (pair? (definition-symbol definition))
+      (let* ((function-declaration (definition-symbol definition))
+             (function-name (car function-declaration))
+             (function-parameters (cdr function-declaration))
+             (function-body (cddr definition))
+             (new-function (list 'lambda function-parameters function-body)))
+         [(env 'set-binding!) function-name (ev new-function env)]) 
+             
+      [(env 'set-binding!) (definition-symbol definition) (ev (definition-value definition) env)]))
 (define (assignment? exp) (tagged-list? exp 'set!))
 (define (assignment-symbol assignment) (cadr assignment))
 (define (assignment-value assignment) (caddr assignment))
@@ -238,6 +246,13 @@
    (check-equal? (ev 'x env) -2 "checking assignments")
    (ev '(set! a (+ 1 x)) env)
    (check-equal? (ev 'a env) -1 "checking assignments in parent frame")
+   ;;function definitions
+   (ev '(define (f x y) (* x y)) env)
+   (check-equal? (ev '(f 2 3) env) 6 "checking defined function")
+   (ev '(define (g x y) (define z 8) (- (f x y) z)) env)
+   (check-equal? (ev '(g 2 3) env) -2 "testing evaluation of a complex function")
+   (ev '(define (lexical-scoping) (define (add-one x) (+ x 1)) (add-one 3)) env)
+   (check-equal? (ev '(lexical-scoping) env) 4 "testing function with internal definitions")
    ))
 
 (test-begin
