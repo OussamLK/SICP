@@ -5,7 +5,7 @@
 (define ns (make-base-namespace))
 (define nil '())
 
-(define (tagged-list? exp tag) (eq? tag (car exp)))
+(define (tagged-list? exp tag) (and (pair? exp) (eq? tag (car exp))))
 (define (not-eq? v w) (not (eq? v w)))
 (define (primitive-procedure? procedure) [set-member? (seteq + - / * = < >) procedure])
 (define (variable? exp) (symbol? exp))
@@ -60,6 +60,14 @@
 (define (first-operand exp) (car (operands exp)))
 (define (rest-operands exp) (cdr (operands exp)))
 (define (operator application) (car application))
+(define (evaluate-function exp env)
+  (define (get-value var) (ev var env))
+  (let ([function (ev (operator exp) env)])
+                                   (if function (apply_ function [map get-value (cdr exp)])
+                                     (error "I can not find function: " (operator exp)))))
+
+(define (call? exp) (tagged-list? exp 'call))
+(define call-function cdr)
 
 (define (begin? exp) (tagged-list? exp 'begin))
 (define (last-expression? exp) (null? (cdr exp)))
@@ -152,7 +160,8 @@
 
 (define (ev exp env)  
   (define (get-value sym) (ev sym env))
-  (cond ((self-evaluating? exp) exp)
+  (cond ((call? exp) (evaluate-function (call-function exp) env))
+        ((self-evaluating? exp) exp)
         ((variable? exp) ([env 'get-binding] exp))
         ((definition? exp) (eval-definition exp env))
         ((assignment? exp) (eval-assignment exp env))
@@ -161,9 +170,7 @@
         ((begin? exp) (eval-begin exp env))
         ((lambda? exp) (make-procedure (lambda-parameters exp) (lambda-body exp) env))
         ((cond? exp) (eval-cond exp env))
-        ((application? exp) (let ([function (ev (operator exp) env)])
-                                   (if function (apply_ function [map get-value (cdr exp)])
-                                     (error "I can not find function: " (operator exp)))))
+        ((application? exp) (evaluate-function exp env))
         (else (error "I do not know how to evaluate: " exp ))))
 
 
@@ -275,6 +282,7 @@
    (check-equal? [ev '(f1 2 6)  env] -2 "evaluating quoted expressions")
    ((env 'set-binding!) 'f2 (make-procedure '() (list 0 1) env))
    (check-equal? (ev '(f2) env) 1 "evaluating a procedure with no operands")
+   (check-equal? (ev '(call f2) env) (ev '(f2) env) "testing call")
    ))
 
 (test-begin
