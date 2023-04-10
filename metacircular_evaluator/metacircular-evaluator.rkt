@@ -25,7 +25,10 @@
 (define nil '())
 
 (define (tagged-list? exp tag) (and (pair? exp) (eq? tag (car exp))))
+(define (parameter-values exp env) (map (lambda (v) (ev v env)) (cdr exp)))
 (define (get-tag exp) (car exp))
+(define (expression-parameters exp) (cdr exp))
+
 (define (not-eq? v w) (not (eq? v w)))
 (define (primitive-procedure? procedure) [set-member? (seteq + - / * = < >) procedure])
 (define (variable? exp) (symbol? exp))
@@ -131,6 +134,23 @@
 (define (cond->if exp) (clauses->if (clauses exp)))
 (define (eval-cond exp env) (ev (cond->if exp) env))
     
+(define (or? exp) (tagged-list? 'or exp))
+(define (eval-or exp env)
+    (define (loop parameters)
+      (cond ((null? parameters) #f)
+            ((ev (car parameters) env) #t)
+            (else (loop (cdr parameters)))))
+    (loop (expression-parameters exp)))
+(register-generic-expression 'or eval-or)
+
+(define (and? exp) (tagged-list? 'and exp))
+(define (eval-and exp env)
+  (define (loop parameters)
+    (cond ((null? parameters) #t)
+          ((not (ev (car parameters) env)) #f)
+          (else (loop (cdr parameters)))))
+  (loop (expression-parameters exp)))
+(register-generic-expression 'and eval-and)
 
 
 
@@ -338,6 +358,23 @@
    (define cond2 '(cond ((> y 0) 0) (else y)))
    (check-equal? (ev cond2 env) -3 "checking a cond with an else clause")
    
+   ))
+
+(test-begin
+ "testing the and and or expression"
+ (define envs (setup-test-envs))
+ (let [(g (car envs))
+       (env (cdr envs))]
+   (define cond1 '(cond ((< x 0) (- x))
+                        (else x)))
+   (ev '(define t #t) env)
+   (ev '(define f #f) env)
+   (check-equal? (ev '(or t f) env) #t "checking that or returns true when there is a true value")
+   (check-equal? (ev '(or f f) env) #f "checking that or returns true when there is a true value")
+   (check-equal? (ev '(or f f f t) env) #t "checking or when the last value is true")
+   (check-equal? (ev '(and f f f t) env) #f "checking and when the last value is true")
+   (check-equal? (ev '(and t t t t f) env) #f "checking and when the last value is false")
+
    ))
 
 (define cond_ '(cond ((< x 0) (- x))
