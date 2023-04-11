@@ -6,6 +6,13 @@
 (define (boolean v)
   (if v #t #f))
 
+(define (attach-logger f)
+  (define (temp . args)
+       (map display (list "calling function " f " on \n\t" args "\n \t result was \n \t" (apply f args) "\n"))
+       (apply f args))
+  temp
+  )
+
 (define (register-generic-expression type-name evaluator)
   ((data-dispatcher 'register-type) type-name)
   ((data-dispatcher 'register-function) type-name 'evaluator evaluator))
@@ -48,7 +55,7 @@
              (function-name (car function-declaration))
              (function-parameters (cdr function-declaration))
              (function-body (cddr definition))
-             (new-function (list 'lambda function-parameters function-body)))
+             (new-function (cons 'lambda (cons function-parameters function-body))))
          [(env 'set-binding!) function-name (ev new-function env)]) 
              
       [(env 'set-binding!) (definition-symbol definition) (ev (definition-value definition) env)]))
@@ -67,7 +74,7 @@
 
 (define (lambda? exp) (tagged-list? exp 'lambda))
 (define (lambda-parameters lambda-expression) (cadr lambda-expression))
-(define (lambda-body lambda-expression) (caddr lambda-expression))
+(define (lambda-body lambda-expression) (cddr lambda-expression))
 
 (define (if? exp) (tagged-list? exp 'if))
 (define (if-predicate if-expression) (cadr if-expression))
@@ -119,21 +126,27 @@
 (define (clause-actions clause) (cdr clause))
 (define (else-clause? clause) (tagged-list? clause 'else))
 (define (else-action clause) (cadr clause))
+(define (arrow-clause? clause) (eq? (cadr clause) '=>))
+(define (arrow-clause-function clause) (caddr clause))
 
-
+(define (not-implemented! . args) (error "unimplemented error"))
 (define (clauses->if clauses)
   (if (null? clauses) #f
       (let ((clause (car clauses)))
-           (if (else-clause? clause) (seq->begin (clause-actions clause))
-               (list 'if
-                     (clause-predicate (first-clause clauses))
-                     (seq->begin (clause-actions clause))
-                     (clauses->if (rest-clauses clauses))
-                     )))))
+           (cond ((arrow-clause? clause) [list 'if (clause-predicate clause)
+                                                     (list (arrow-clause-function clause) (clause-predicate clause))
+                                                     (clauses->if (rest-clauses clauses))
+                                                ])
+                 ((else-clause? clause) (seq->begin (clause-actions clause)))
+                 (else (list 'if (clause-predicate (first-clause clauses))
+                                     (seq->begin (clause-actions clause))
+                                     (clauses->if (rest-clauses clauses))
+                     ))))))
 
 (define (cond->if exp) (clauses->if (clauses exp)))
 (define (eval-cond exp env) (ev (cond->if exp) env))
-    
+
+
 (define (or? exp) (tagged-list? 'or exp))
 (define (eval-or exp env)
     (define (loop parameters)
@@ -300,6 +313,7 @@
    (ev '(set! x -2) env)
    (check-equal? (ev 'x env) -2 "checking assignments")
    (ev '(set! a (+ 1 x)) env)
+   
    (check-equal? (ev 'a env) -1 "checking assignments in parent frame")
    ;;function definitions
    (ev '(define (f x y) (* x y)) env)
@@ -331,6 +345,7 @@
    ((env 'set-binding!) 'f2 (make-procedure '() (list 0 1) env))
    (check-equal? (ev '(f2) env) 1 "evaluating a procedure with no operands")
    (check-equal? (ev '(call f2) env) (ev '(f2) env) "testing call")
+   (check-equal? (ev '((lambda (x) x) 0) env) 0 "checking the call of lambda functions on the fly")
    ))
 
 (test-begin
@@ -357,6 +372,8 @@
    (check-equal? (ev cond1 env) 2 "checking abs with positive value")
    (define cond2 '(cond ((> y 0) 0) (else y)))
    (check-equal? (ev cond2 env) -3 "checking a cond with an else clause")
+   (define cond-arrow '[cond (0 => (lambda (x) x))])
+   (check-equal? (ev cond-arrow env) 0 "Checking for the => special form cond clause")
    
    ))
 
@@ -377,5 +394,4 @@
 
    ))
 
-(define cond_ '(cond ((< x 0) (- x))
-                     (else x)))
+ (define g (create-environment '()))
