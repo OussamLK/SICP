@@ -165,6 +165,18 @@
   (loop (expression-parameters exp)))
 (register-generic-expression 'and eval-and)
 
+(define (let? exp) (tagged-list? 'let exp))
+(define let-bindings cadr)
+(define let-body cddr)
+(define (let->lambda exp env)
+  (define (get-value var) (ev var env))
+  (let ((binding-symbols (map car (let-bindings exp)))
+        (binding-values (map get-value (map cadr (let-bindings exp))))
+        (body (let-body exp)))
+    (cons (cons 'lambda (cons binding-symbols body)) binding-values)))
+(define (eval-let exp env) (ev (let->lambda exp env) env))
+(register-generic-expression 'let eval-let)
+
 
 
 (define (create-environment parent)
@@ -394,4 +406,15 @@
 
    ))
 
- (define g (create-environment '()))
+(test-begin
+ "testing the let expression"
+ (define envs (setup-test-envs))
+ (let [(g (car envs))
+       (env (cdr envs))]
+   (define cond1 '(cond ((< x 0) (- x))
+                        (else x)))
+   (define let-exp '(let ((x 3) (y 2)) (define z 7) (* z y x)))
+   (check-equal? (ev let-exp g) 42 "checking that let expressions work as expected")
+   (ev '(define z 2) env)
+   (check-equal? (ev '(let ((x 1)) (+ x z)) env) 3 "checking evaluation of variables inside let expressions")
+   ))
