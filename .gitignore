@@ -2,3 +2,4 @@
 *#*
 *interpreter_files*
 *.bak*
+*.rkt~*
