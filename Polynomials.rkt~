@@ -1,0 +1,16 @@
+#lang racket
+(define (make-monom coef variable degree)
+  (list coef variable degree))
+(define (get-monom-coef monom)
+  (car monom))
+(define (get-monom-variable monom)
+  (cadr monom))
+(define (get-monom-degree)
+  (caddr monom))
+
+
+
+(define (add-poly poly1 poly2)
+  0)
+(define (mult-poly poly1 poly2)
+  0)

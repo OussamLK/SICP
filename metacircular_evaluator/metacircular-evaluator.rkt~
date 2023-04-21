@@ -147,7 +147,7 @@
 (define (eval-cond exp env) (ev (cond->if exp) env))
 
 
-(define (or? exp) (tagged-list? exp 'or))
+(define (or? exp) (tagged-list? 'or exp))
 (define (eval-or exp env)
     (define (loop parameters)
       (cond ((null? parameters) #f)
@@ -156,7 +156,7 @@
     (loop (expression-parameters exp)))
 (register-generic-expression 'or eval-or)
 
-(define (and? exp) (tagged-list? exp 'and))
+(define (and? exp) (tagged-list? 'and exp))
 (define (eval-and exp env)
   (define (loop parameters)
     (cond ((null? parameters) #t)
@@ -165,8 +165,7 @@
   (loop (expression-parameters exp)))
 (register-generic-expression 'and eval-and)
 
-(define (let? exp) (tagged-list? exp 'let))
-(define (make-let clauses body-expressions) (cons 'let (cons clauses body-expressions)))
+(define (let? exp) (tagged-list? 'let exp))
 (define let-bindings cadr)
 (define let-body cddr)
 (define (let->lambda exp env)
@@ -174,31 +173,10 @@
   (let ((binding-symbols (map car (let-bindings exp)))
         (binding-values (map get-value (map cadr (let-bindings exp))))
         (body (let-body exp)))
-    (cons (cons 'lambda (cons binding-symbols body))
-          binding-values)))
+    (cons (cons 'lambda (cons binding-symbols body)) binding-values)))
 (define (eval-let exp env) (ev (let->lambda exp env) env))
 (register-generic-expression 'let eval-let)
 
-
-(define (let*? exp) (tagged-list? exp 'let*))
-(define (make-let* clauses body-expressions) (cons 'let* (cons clauses body-expressions))) 
-(define let*-bindings let-bindings)
-(define let*-body let-body)
-(define (let*->nested-lets exp)
-  (define (has-one-binding let*-exp) (null? (cdr (let*-bindings let*-exp))))
-      (let*  ((bindings (let*-bindings exp))
-              (first-binding (car bindings))
-              (rest-bindings (cdr bindings))
-              (body (let*-body exp))
-              )
-        (if (has-one-binding exp) (make-let (list first-binding) body)
-        (make-let (list first-binding)
-                  (list (let*->nested-lets (make-let* rest-bindings body)))
-        ))))
-(define (eval-let* exp env)
-  (ev (let*->nested-lets exp) env))
-(register-generic-expression 'let* eval-let*)
-  
 
 
 (define (create-environment parent)
@@ -439,24 +417,4 @@
    (check-equal? (ev let-exp g) 42 "checking that let expressions work as expected")
    (ev '(define z 2) env)
    (check-equal? (ev '(let ((x 1)) (+ x z)) env) 3 "checking evaluation of variables inside let expressions")
-   ))
-
-(test-begin
- "testing the let expression"
- (define envs (setup-test-envs))
- (let [(g (car envs))
-       (env (cdr envs))]
-   (define exp0 (make-let* '((x 1)) '(x)))
-   (define exp2 (make-let* '((x 1)) '((+ x 1))))
-   (define exp '(let* ((x 1) (y x)) (+ x y)))
-   (define exp3 '(let* ((x 1) (y x)) (+ x y)))
-   (check-equal? (let*? exp) #t "testing the let*? function")
-   (check-equal? (let*-bindings exp) '((x 1) (y x)) "testing the let*-bindings function")
-   (check-equal? (let*-body exp) '((+ x y)) "testing the let*-bindings function")
-   (check-equal? (let*-body exp0) '(x))
-   (check-equal? (let*-body exp2) '((+ x 1)))
-   (check-equal? (let*->nested-lets exp0) '(let ((x 1)) x))
-   (check-equal? (let*->nested-lets exp2) '(let ((x 1)) (+ x 1)))
-   (check-equal? (let*->nested-lets exp) '(let ((x 1)) (let ((y x)) (+ x y))) "testing the conversion")
-   (check-equal? (ev exp3 env) 2 "testing evaluation of let*") 
    ))

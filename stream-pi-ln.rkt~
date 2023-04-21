@@ -1,0 +1,33 @@
+#lang racket
+(define (avg x y) (/ (+ x y) 2))
+
+(define (stream-average s1 s2)
+  (let ((f1 (stream-first s1))
+       (f2 (stream-first s2))
+       (r1 (stream-rest s1))
+       (r2 (stream-rest s2)))
+  (stream-cons (avg f1 f2) (stream-average r1 r2))))
+
+(define (num-stream-div n s)
+  (stream-cons (/ n (stream-first s)) (num-stream-div n (stream-rest s))))
+
+
+(define x 16)
+
+(define (sqrt x)
+  (define sqrt-stream (stream-cons 1 (stream-average sqrt-stream (num-stream-div x sqrt-stream))))
+  (define (loop index)
+    (let ((si (stream-ref sqrt-stream index))
+          (si1 (stream-ref sqrt-stream (+ index 1))))
+      (if (< (abs (- si si1)) 0.01) (* 1.0 si) (loop (+ index 1)))))
+  (loop 0))
+
+(define (get-ln2-summands)
+  (define (ln2-parial n)
+    (stream-cons (/ 1 n) (stream-map - (ln2-parial (+ n 1)))))
+  (ln2-parial 1))
+(define ln2-summands (get-ln2-summands))
+
+(define (partial-sum s n) (if (= n 0) 0.0 (+ (stream-first s) (partial-sum (stream-rest s) (- n 1)))))
+
+(define (approx-ln2 n) (partial-sum ln2-summands n))
