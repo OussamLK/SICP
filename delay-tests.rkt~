@@ -1,5 +1,0 @@
-#lang racket
-(require racket/promise)
-(define (stream-cons x y) (cons x (delay y)))
-(define (stream-car s) (car s))
-(define (stream-cdr s) (force (cdr s)))
