@@ -1,11 +1,41 @@
 #lang racket/base
 (require rackunit)
 (require racket/set)
+(require "data-directed-dispatch.rkt")
 
+(define (boolean v)
+  (if v #t #f))
+
+(define (attach-logger f)
+  (define (temp . args)
+       (map display (list "calling function " f " on \n\t" args "\n \t result was \n \t" (apply f args) "\n"))
+       (apply f args))
+  temp
+  )
+
+(define (register-generic-expression type-name evaluator)
+  ((data-dispatcher 'register-type) type-name)
+  ((data-dispatcher 'register-function) type-name 'evaluator evaluator))
+
+(define (known-generic-expression? exp)
+  (boolean (and (pair? exp)
+                (not (null? exp))
+                ((data-dispatcher 'find-type) (get-tag exp)))))
+
+(define (evaluate-generic-expression exp env)
+  (let ((type (get-tag exp)))
+    (if (not (known-generic-expression? exp)) (error "The expression has a type I do not know: " type)
+        (let ((evaluator ((data-dispatcher 'get-function) type 'evaluator)))
+          ((cdr evaluator) exp env)))))
+          
 (define ns (make-base-namespace))
 (define nil '())
 
 (define (tagged-list? exp tag) (and (pair? exp) (eq? tag (car exp))))
+(define (parameter-values exp env) (map (lambda (v) (ev v env)) (cdr exp)))
+(define (get-tag exp) (car exp))
+(define (expression-parameters exp) (cdr exp))
+
 (define (not-eq? v w) (not (eq? v w)))
 (define (primitive-procedure? procedure) [set-member? (seteq + - / * = < >) procedure])
 (define (variable? exp) (symbol? exp))
@@ -25,10 +55,13 @@
              (function-name (car function-declaration))
              (function-parameters (cdr function-declaration))
              (function-body (cddr definition))
-             (new-function (list 'lambda function-parameters function-body)))
+             (new-function (cons 'lambda (cons function-parameters function-body))))
          [(env 'set-binding!) function-name (ev new-function env)]) 
              
       [(env 'set-binding!) (definition-symbol definition) (ev (definition-value definition) env)]))
+
+(register-generic-expression 'define eval-definition)
+
 (define (assignment? exp) (tagged-list? exp 'set!))
 (define (assignment-symbol assignment) (cadr assignment))
 (define (assignment-value assignment) (caddr assignment))
@@ -41,7 +74,7 @@
 
 (define (lambda? exp) (tagged-list? exp 'lambda))
 (define (lambda-parameters lambda-expression) (cadr lambda-expression))
-(define (lambda-body lambda-expression) (caddr lambda-expression))
+(define (lambda-body lambda-expression) (cddr lambda-expression))
 
 (define (if? exp) (tagged-list? exp 'if))
 (define (if-predicate if-expression) (cadr if-expression))
@@ -53,6 +86,8 @@
         (consequent (if-consequent if-expression))
         (alternative (if-alternative if-expression))]
     (if (true? predicate env) (ev consequent env) (ev alternative env))))
+
+(register-generic-expression 'if eval-if)
 
 (define (application? exp) (pair? exp))
 (define (no-operands? exp) (null? exp))
@@ -81,6 +116,8 @@
 (define (eval-begin exp env) (eval-sequence (begin-actions exp) env))
 (define (seq->begin seq) (make-begin seq))
 
+(register-generic-expression 'begin eval-begin)
+
 (define (cond? exp) (tagged-list? exp 'cond))
 (define (clauses exp) (cdr exp))
 (define (first-clause clauses) (car clauses))
@@ -89,22 +126,111 @@
 (define (clause-actions clause) (cdr clause))
 (define (else-clause? clause) (tagged-list? clause 'else))
 (define (else-action clause) (cadr clause))
+(define (arrow-clause? clause) (eq? (cadr clause) '=>))
+(define (arrow-clause-function clause) (caddr clause))
 
-
+(define (not-implemented! . args) (error "unimplemented error"))
 (define (clauses->if clauses)
   (if (null? clauses) #f
       (let ((clause (car clauses)))
-           (if (else-clause? clause) (seq->begin (clause-actions clause))
-               (list 'if
-                     (clause-predicate (first-clause clauses))
-                     (seq->begin (clause-actions clause))
-                     (clauses->if (rest-clauses clauses))
-                     )))))
+           (cond ((arrow-clause? clause) [list 'if (clause-predicate clause)
+                                                     (list (arrow-clause-function clause) (clause-predicate clause))
+                                                     (clauses->if (rest-clauses clauses))
+                                                ])
+                 ((else-clause? clause) (seq->begin (clause-actions clause)))
+                 (else (list 'if (clause-predicate (first-clause clauses))
+                                     (seq->begin (clause-actions clause))
+                                     (clauses->if (rest-clauses clauses))
+                     ))))))
 
 (define (cond->if exp) (clauses->if (clauses exp)))
 (define (eval-cond exp env) (ev (cond->if exp) env))
-    
 
+
+(define (or? exp) (tagged-list? exp 'or))
+(define (eval-or exp env)
+    (define (loop parameters)
+      (cond ((null? parameters) #f)
+            ((ev (car parameters) env) #t)
+            (else (loop (cdr parameters)))))
+    (loop (expression-parameters exp)))
+(register-generic-expression 'or eval-or)
+
+(define (and? exp) (tagged-list? exp 'and))
+(define (eval-and exp env)
+  (define (loop parameters)
+    (cond ((null? parameters) #t)
+          ((not (ev (car parameters) env)) #f)
+          (else (loop (cdr parameters)))))
+  (loop (expression-parameters exp)))
+(register-generic-expression 'and eval-and)
+
+(define (make-let clauses body-expressions) (cons 'let (cons clauses body-expressions)))
+(define (let? exp) (tagged-list? exp 'let))
+(define let-bindings cadr)
+(define let-body cddr)
+
+
+(define (let->lambda exp env)
+  (define (get-value var) (ev var env))
+  (let ((binding-symbols (map car (let-bindings exp)))
+        (binding-values (map get-value (map cadr (let-bindings exp))))
+        (body (let-body exp)))
+    (cons (cons 'lambda (cons binding-symbols body))
+          binding-values)))
+
+(define (make-named-let name bindings body)
+  ; body is a list of expressions
+  ; bindings is a list of lists
+  ; name is a string
+  (append (list 'let name bindings) body))
+(define (named-let? exp) (symbol? (cadr exp)))
+(define (named-let-name exp) (cadr exp))
+(define (named-let-bindings exp) (caddr exp))
+(define (named-let-binding-variables exp) (map car (named-let-bindings exp)))
+(define (named-let-binding-values exp) (map cadr (named-let-bindings exp)))
+(define (named-let-body exp) (cdddr exp))
+(define (named-let->combination exp)
+  (let ((name (named-let-name exp))
+        (variables (named-let-binding-variables exp))
+        (values (named-let-binding-values exp))
+        (body (named-let-body exp)))
+     (list 'begin (cons 'define (cons (cons name variables) body))
+                 (cons name values))))
+
+(define (let->combination exp env)
+  (if (named-let? exp) (named-let->combination exp) (let->lambda exp env)))
+(define (eval-let exp env) (ev (let->combination exp env) env))
+(register-generic-expression 'let eval-let)
+
+(define (let*? exp) (tagged-list? exp 'let*))
+(define (make-let* clauses body-expressions) (cons 'let* (cons clauses body-expressions))) 
+(define let*-bindings let-bindings)
+(define let*-body let-body)
+(define (let*->nested-lets exp)
+  (define (has-one-binding let*-exp) (null? (cdr (let*-bindings let*-exp))))
+      (let*  ((bindings (let*-bindings exp))
+              (first-binding (car bindings))
+              (rest-bindings (cdr bindings))
+              (body (let*-body exp))
+              )
+        (if (has-one-binding exp) (make-let (list first-binding) body)
+        (make-let (list first-binding)
+                  (list (let*->nested-lets (make-let* rest-bindings body)))
+        ))))
+(define (eval-let* exp env)
+  (ev (let*->nested-lets exp) env))
+(register-generic-expression 'let* eval-let*)
+
+(define (make-for variable iterable body) (list 'for variable iterable body))
+(define (for? exp) (tagged-list? exp 'for))
+(define (for-variable exp) (cadr exp))
+(define (for-iterable exp) (caddr exp))
+(define (for-body exp) (cdddr exp))
+(define (for->recursive exp) (list 'let 'loop (list (list 'iter_ (for-iterable exp)))
+                                  (list 'let (list (list (for-variable exp)))
+                                        (for-body exp)
+                                        '(loop (cdr 'iter_))))) 
 
 
 (define (create-environment parent)
@@ -160,14 +286,15 @@
 
 (define (ev exp env)  
   (define (get-value sym) (ev sym env))
-  (cond ((call? exp) (evaluate-function (call-function exp) env))
+  (cond ((known-generic-expression? exp) (evaluate-generic-expression exp env))
+        ((call? exp) (evaluate-function (call-function exp) env))
         ((self-evaluating? exp) exp)
         ((variable? exp) ([env 'get-binding] exp))
-        ((definition? exp) (eval-definition exp env))
+        ;((definition? exp) (eval-definition exp env))
         ((assignment? exp) (eval-assignment exp env))
         ((quoted? exp) (text-of-quotation exp))
-        ((if? exp) (eval-if exp env))
-        ((begin? exp) (eval-begin exp env))
+        ;((if? exp) (eval-if exp env))
+        ;((begin? exp) (eval-begin exp env))
         ((lambda? exp) (make-procedure (lambda-parameters exp) (lambda-body exp) env))
         ((cond? exp) (eval-cond exp env))
         ((application? exp) (evaluate-function exp env))
@@ -252,6 +379,7 @@
    (ev '(set! x -2) env)
    (check-equal? (ev 'x env) -2 "checking assignments")
    (ev '(set! a (+ 1 x)) env)
+   
    (check-equal? (ev 'a env) -1 "checking assignments in parent frame")
    ;;function definitions
    (ev '(define (f x y) (* x y)) env)
@@ -283,6 +411,7 @@
    ((env 'set-binding!) 'f2 (make-procedure '() (list 0 1) env))
    (check-equal? (ev '(f2) env) 1 "evaluating a procedure with no operands")
    (check-equal? (ev '(call f2) env) (ev '(f2) env) "testing call")
+   (check-equal? (ev '((lambda (x) x) 0) env) 0 "checking the call of lambda functions on the fly")
    ))
 
 (test-begin
@@ -309,8 +438,87 @@
    (check-equal? (ev cond1 env) 2 "checking abs with positive value")
    (define cond2 '(cond ((> y 0) 0) (else y)))
    (check-equal? (ev cond2 env) -3 "checking a cond with an else clause")
+   (define cond-arrow '[cond (0 => (lambda (x) x))])
+   (check-equal? (ev cond-arrow env) 0 "Checking for the => special form cond clause")
    
    ))
 
-(define cond_ '(cond ((< x 0) (- x))
-                     (else x)))
+(test-begin
+ "testing the and and or expression"
+ (define envs (setup-test-envs))
+ (let [(g (car envs))
+       (env (cdr envs))]
+   (define cond1 '(cond ((< x 0) (- x))
+                        (else x)))
+   (ev '(define t #t) env)
+   (ev '(define f #f) env)
+   (check-equal? (ev '(or t f) env) #t "checking that or returns true when there is a true value")
+   (check-equal? (ev '(or f f) env) #f "checking that or returns true when there is a true value")
+   (check-equal? (ev '(or f f f t) env) #t "checking or when the last value is true")
+   (check-equal? (ev '(and f f f t) env) #f "checking and when the last value is true")
+   (check-equal? (ev '(and t t t t f) env) #f "checking and when the last value is false")
+
+   ))
+
+(test-begin
+ "testing the let expression"
+ (define envs (setup-test-envs))
+ (let [(g (car envs))
+       (env (cdr envs))]
+   (define cond1 '(cond ((< x 0) (- x))
+                        (else x)))
+   (define let-exp '(let ((x 3) (y 2)) (define z 7) (* z y x)))
+   (check-equal? (ev let-exp g) 42 "checking that let expressions work as expected")
+   (ev '(define z 2) env)
+   (check-equal? (ev '(let ((x 1)) (+ x z)) env) 3 "checking evaluation of variables inside let expressions")
+   ))
+
+(test-begin
+ "testing the let expression"
+ (define envs (setup-test-envs))
+ (let [(g (car envs))
+       (env (cdr envs))]
+   (define exp0 (make-let* '((x 1)) '(x)))
+   (define exp2 (make-let* '((x 1)) '((+ x 1))))
+   (define exp '(let* ((x 1) (y x)) (+ x y)))
+   (define exp3 '(let* ((x 1) (y x)) (+ x y)))
+   (check-equal? (let*? exp) #t "testing the let*? function")
+   (check-equal? (let*-bindings exp) '((x 1) (y x)) "testing the let*-bindings function")
+   (check-equal? (let*-body exp) '((+ x y)) "testing the let*-bindings function")
+   (check-equal? (let*-body exp0) '(x))
+   (check-equal? (let*-body exp2) '((+ x 1)))
+   (check-equal? (let*->nested-lets exp0) '(let ((x 1)) x))
+   (check-equal? (let*->nested-lets exp2) '(let ((x 1)) (+ x 1)))
+   (check-equal? (let*->nested-lets exp) '(let ((x 1)) (let ((y x)) (+ x y))) "testing the conversion")
+   (check-equal? (ev exp3 env) 2 "testing evaluation of let*")
+   (define named-let1 (make-named-let 'function '((x 1) (y 0)) '((define x 1) x)))
+   (check-equal? (named-let? named-let1) #t "checking named-let? is working")
+   (check-equal? (named-let? exp0) #f "checking that named-let? returned #f on a normal let")
+   (check-equal? (named-let-name named-let1) 'function "checking named-let-name")
+   (check-equal? (named-let-binding-variables named-let1) '(x y) "checking named-let-variables")
+   (check-equal? (named-let-binding-values named-let1) '(1 0) "checking named-let-values")
+   (check-equal? (named-let-body named-let1) '((define x 1) x) "checking named-let-body")
+   (check-equal? (named-let->combination named-let1) '(begin (define (function x y) (define x 1) x)
+                                                              (function 1 0)))
+   (check-equal? (ev named-let1 env) 1 "Checking the valuation of a named-let")
+   ))
+
+(test-begin
+ "testing the loops expression"
+ (define envs (setup-test-envs))
+ (let [(g (car envs))
+       (env (cdr envs))]
+  (define for-expression (make-for 'x '(1 2 3) '(display x)))
+  (check-equal? for-expression '(for x (1 2 3) (display x))) 
+  (check-equal? (for? for-expression) #t)
+  (check-equal? (for-variable for-expression) 'x)
+  (check-equal? (for-iterable for-expression) '(1 2 3))
+  (check-equal? (for-body for-expression) '((display x)))
+  (check-equal? (for->recursive for-expression) (list 'let 'loop (list (list 'iter_ (for-iterable for-expression)))
+
+                                                      '(let (((for-variable for-expression) '(car iter_)))
+                                                              (for-body for-expression)
+                                                              '(loop (for-iterable) '(cdr iter_) (for-body for-expression)))))
+                
+   ))
+

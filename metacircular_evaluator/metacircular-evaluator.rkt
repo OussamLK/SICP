@@ -165,10 +165,12 @@
   (loop (expression-parameters exp)))
 (register-generic-expression 'and eval-and)
 
-(define (let? exp) (tagged-list? exp 'let))
 (define (make-let clauses body-expressions) (cons 'let (cons clauses body-expressions)))
+(define (let? exp) (tagged-list? exp 'let))
 (define let-bindings cadr)
 (define let-body cddr)
+
+
 (define (let->lambda exp env)
   (define (get-value var) (ev var env))
   (let ((binding-symbols (map car (let-bindings exp)))
@@ -176,9 +178,30 @@
         (body (let-body exp)))
     (cons (cons 'lambda (cons binding-symbols body))
           binding-values)))
-(define (eval-let exp env) (ev (let->lambda exp env) env))
-(register-generic-expression 'let eval-let)
 
+(define (make-named-let name bindings body)
+  ; body is a list of expressions
+  ; bindings is a list of lists
+  ; name is a string
+  (append (list 'let name bindings) body))
+(define (named-let? exp) (symbol? (cadr exp)))
+(define (named-let-name exp) (cadr exp))
+(define (named-let-bindings exp) (caddr exp))
+(define (named-let-binding-variables exp) (map car (named-let-bindings exp)))
+(define (named-let-binding-values exp) (map cadr (named-let-bindings exp)))
+(define (named-let-body exp) (cdddr exp))
+(define (named-let->combination exp)
+  (let ((name (named-let-name exp))
+        (variables (named-let-binding-variables exp))
+        (values (named-let-binding-values exp))
+        (body (named-let-body exp)))
+     (list 'begin (cons 'define (cons (cons name variables) body))
+                 (cons name values))))
+
+(define (let->combination exp env)
+  (if (named-let? exp) (named-let->combination exp) (let->lambda exp env)))
+(define (eval-let exp env) (ev (let->combination exp env) env))
+(register-generic-expression 'let eval-let)
 
 (define (let*? exp) (tagged-list? exp 'let*))
 (define (make-let* clauses body-expressions) (cons 'let* (cons clauses body-expressions))) 
@@ -198,7 +221,23 @@
 (define (eval-let* exp env)
   (ev (let*->nested-lets exp) env))
 (register-generic-expression 'let* eval-let*)
-  
+
+(define (make-for variable iterable body) (list 'for variable iterable body))
+(define (for? exp) (tagged-list? exp 'for))
+(define (for-variable exp) (cadr exp))
+(define (for-iterable exp) (caddr exp))
+(define (for-body exp) (cdddr exp))
+(define (for->recursive exp)
+  ;not working
+  (list 'let (list 
+                   (list 'iter (for-iterable exp))
+                   (list 'body (for-body exp)))
+                (list 'let 'inner-loop '((iter_ iter))
+                  
+                     (list 'if '(null? iter_) 'done
+                         (list 'let (list (list (for-variable exp) '(car iter_)))
+                           '(begin (seq->begin body)
+                                (inner-loop (cdr iter_))))))))
 
 
 (define (create-environment parent)
@@ -459,4 +498,29 @@
    (check-equal? (let*->nested-lets exp2) '(let ((x 1)) (+ x 1)))
    (check-equal? (let*->nested-lets exp) '(let ((x 1)) (let ((y x)) (+ x y))) "testing the conversion")
    (check-equal? (ev exp3 env) 2 "testing evaluation of let*")
+   (define named-let1 (make-named-let 'function '((x 1) (y 0)) '((define x 1) x)))
+   (check-equal? (named-let? named-let1) #t "checking named-let? is working")
+   (check-equal? (named-let? exp0) #f "checking that named-let? returned #f on a normal let")
+   (check-equal? (named-let-name named-let1) 'function "checking named-let-name")
+   (check-equal? (named-let-binding-variables named-let1) '(x y) "checking named-let-variables")
+   (check-equal? (named-let-binding-values named-let1) '(1 0) "checking named-let-values")
+   (check-equal? (named-let-body named-let1) '((define x 1) x) "checking named-let-body")
+   (check-equal? (named-let->combination named-let1) '(begin (define (function x y) (define x 1) x)
+                                                              (function 1 0)))
+   (check-equal? (ev named-let1 env) 1 "Checking the valuation of a named-let")
    ))
+
+(test-begin
+ "testing the loops expression"
+ (define envs (setup-test-envs))
+ (let [(g (car envs))
+       (env (cdr envs))]
+  (define for-expression (make-for 'x '(1 2 3) '(display x)))
+  (check-equal? for-expression '(for x (1 2 3) (display x))) 
+  (check-equal? (for? for-expression) #t)
+  (check-equal? (for-variable for-expression) 'x)
+  (check-equal? (for-iterable for-expression) '(1 2 3))
+  (check-equal? (for-body for-expression) '((display x)))
+   ;incomplete
+   ))
+
