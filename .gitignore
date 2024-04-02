@@ -3,3 +3,5 @@
 *interpreter_files*
 *.bak*
 *.rkt~*
+*~*
+.DS_Store
